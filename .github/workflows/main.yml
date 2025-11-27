@@ -1,0 +1,39 @@
+name: "RDP Debug via Tailscale (6 hours)"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    steps:
+      - name: Set RDP Password
+        # <<< EDIT YOUR PASSWORD HERE >>>
+        run: net user runneradmin MrKarthik_M4
+        shell: powershell
+
+      - name: Install Tailscale
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup.exe" -OutFile "C:\TailscaleSetup.exe"
+          Start-Process -FilePath "C:\TailscaleSetup.exe" -ArgumentList "/quiet" -Wait
+        shell: powershell
+
+      - name: Start Tailscale & join your network
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          & 'C:\Program Files\Tailscale IPN\tailscale.exe' up --authkey $env:TAILSCALE_AUTHKEY --accept-routes=true --hostname github-runner
+        shell: powershell
+
+      - name: Output connection info to summary
+        run: |
+          $tsIP = & 'C:\Program Files\Tailscale IPN\tailscale.exe' ip -4
+          "## 🖥️ RDP Connection Details`n" +
+          "**IP:** $tsIP`n" +
+          "**Username:** runneradmin`n" +
+          "**Password:** My$ecureP@ssw0rd2025" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+        shell: powershell
+
+      - name: Wait for 6 hours for remote debugging
+        run: Start-Sleep -Seconds 21600
+        shell: powershell
