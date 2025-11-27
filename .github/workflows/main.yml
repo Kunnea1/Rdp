@@ -9,29 +9,60 @@ jobs:
     steps:
       - name: Set RDP Password
         # <<< EDIT YOUR PASSWORD HERE >>>
-        run: net user runneradmin MrKarthik_M4
+        run: net user runneradmin "YOUR_SECURE_PASSWORD_HERE"
         shell: powershell
 
       - name: Install Tailscale
         run: |
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "C:\TailscaleSetup.exe"
-          Start-Process -FilePath "C:\TailscaleSetup.exe" -ArgumentList "/quiet" -Wait
+          $ErrorActionPreference = 'Stop'
+          $tailscaleUri = "https://pkgs.tailscale.com/stable/tailscale-setup.exe"
+          $tailscaleOut = "C:\TailscaleSetup.exe"
+          try {
+            Invoke-WebRequest -Uri $tailscaleUri -OutFile $tailscaleOut
+          } catch {
+            Write-Error "Failed to download Tailscale. Check network connectivity or firewall settings."
+            exit 1
+          }
+          try {
+            Start-Process -FilePath $tailscaleOut -ArgumentList "/quiet" -Wait
+          } catch {
+            Write-Error "Failed to install Tailscale."
+            exit 1
+          }
         shell: powershell
 
       - name: Start Tailscale & join your network
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          & 'C:\Program Files\Tailscale IPN\tailscale.exe' up --authkey $env:TAILSCALE_AUTHKEY --accept-routes=true --hostname github-runner
+          $ErrorActionPreference = 'Stop'
+          $tsExe = 'C:\Program Files\Tailscale IPN\tailscale.exe'
+          if (-not (Test-Path $tsExe)) {
+              Write-Error "Tailscale did not install correctly."
+              exit 1
+          }
+          try {
+            & $tsExe up --authkey $env:TAILSCALE_AUTHKEY --accept-routes=true --hostname github-runner
+          } catch {
+            Write-Error "Failed to start Tailscale. Check your TAILSCALE_AUTHKEY GitHub secret."
+            exit 1
+          }
         shell: powershell
 
       - name: Output connection info to summary
         run: |
-          $tsIP = & 'C:\Program Files\Tailscale IPN\tailscale.exe' ip -4
-          "## 🖥️ RDP Connection Details`n" +
-          "**IP:** $tsIP`n" +
-          "**Username:** runneradmin`n" +
-          "**Password:** My$ecureP@ssw0rd2025" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          $ErrorActionPreference = 'Stop'
+          $tsExe = 'C:\Program Files\Tailscale IPN\tailscale.exe'
+          try {
+            $tsIP = & $tsExe ip -4
+            "## 🖥️ RDP Connection Details`n" +
+            "**IP:** $tsIP`n" +
+            "**Username:** runneradmin`n" +
+            "**Password:** YOUR_SECURE_PASSWORD_HERE" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          } catch {
+            Write-Error "Could not get Tailscale IP information."
+            exit 1
+          }
         shell: powershell
 
       - name: Wait for 6 hours for remote debugging
